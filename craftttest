@@ -1,0 +1,84 @@
+<drac2>
+DC="3d4+8"
+aliasName=ctx.alias
+cvarName="craftArgs" # the name of the cvar used to speed up future runs by not needing args
+validLifestyles=["wretched", "squalid", "poor", "self-sufficient", "modest", "comfortable", "wealthy", "aristocratic"]
+
+if character().get_cc("DTD")==0:
+    return f'''embed -title "Downtime Activity: Craft trinket" -desc "Insufficient downtime remaining this week. Wait till the week is up, pay your lifestyle, then try again." -footer "!{aliasName} <lifestyle> <acrobatics OR athletics> <perception OR insight OR investigation>" -color FF0000 -thumb "{image}"'''
+
+args=&ARGS& if (exists(cvarName)==False or len(&ARGS&)>0) else load_json(get(cvarName))
+character().set_cvar(cvarName,dump_json(args))
+
+helpMessage="techo 10 Run `!help craft` for help with using this alias."
+
+if len(args)<3:
+    return helpMessage
+
+lifestyle=args[0].lower()
+ma=args[1].lower()
+mb=args[2].lower()
+
+
+ta=["Glassblower's Tools","Jeweler's Tools", "Leatherworker's Tools", "Smith's Tools", "Tinker's Tools", "Woodcarver's Tools"]
+tb=["strength", "intelligence", "charisma", "dexterity", "wisdom"]
+c1Name=[x for x in ta if ma in x.lower()]
+c2Name=[x for x in tb if mb in x]
+
+if c1Name[0] in ta and c1Name[0] in eTools:
+   p=2*proficiencyBonus
+elif c2Name[0] in ta and c2Name[0] in pTools:
+   p=proficiencyBonus
+else:
+   p=0
+  
+a=c2Name[0]
+
+if lifestyle not in validLifestyles:
+    return helpMessage
+if c1Name == []:
+    return helpMessage
+if c2Name == []:
+    return helpMessage
+
+advList,parsed=[None,None,None],argparse(args)
+if parsed.last("dis1") and not parsed.last("adv1"):
+    advList[0]=False
+elif parsed.last("adv1") and not parsed.last("dis1"):
+    advList[0]=True
+if parsed.last("dis2") and not parsed.last("adv2"):
+    advList[1]=False
+elif parsed.last("adv2") and not parsed.last("dis2"):
+    advList[1]=True
+
+c1=[vroll(character().skills["arcana"].d20(base_adv=advList[0],min_val=10 if (character().csettings.get("talent",False) and character().skills["arcana"].prof>0) else None,reroll=1 if bool(character().csettings.get("reroll",False)) else 0)), vroll(character().skills["arcana"].d20(base_adv=advList[0],min_val=10 if (character().csettings.get("talent",False) and character().skills["arcana"].prof>0) else None,reroll=1 if bool(character().csettings.get("reroll",False)) else 0))]
+
+c2=[vroll(character().skills[c2Name[0]].d20(base_adv=advList[1],min_val=10 if (character().csettings.get("talent",False) and character().skills[c2Name[0]].prof>0) else None,reroll=1 if bool(character().csettings.get("reroll",False)) else 0)),vroll(character().skills[c2Name[0]].d20(base_adv=advList[1],min_val=10 if (character().csettings.get("talent",False) and character().skills[c2Name[0]].prof>0) else None,reroll=1 if bool(character().csettings.get("reroll",False)) else 0))]
+
+if c1[0].total<=c2[0].total:
+    c1,c2,rrStr=c1[0] if c1[0].total>c1[1].total else c1[1],c2[0],c1[0]
+    rrName=c1Name[0].title()
+elif c2[0].total<=c1[0].total:
+    c1,c2,rrStr=c1[0],c2[0] if c2[0].total>c2[1].total else c2[1],c2[0]
+    rrName=c2Name[0].title()
+
+d100=vroll("1d100")
+dcList=[roll(DC),roll(DC),roll(DC)]
+numSuc=sum([1 if c1.total>=dcList[0] else 0, 1 if c2.total>=dcList[1] else 0])
+
+bonusPay=1 if parsed.last("hardworker") else 0
+bonusPay=bonusPay if numSuc>0 else 0
+payoutText=f"{(5*numSuc)+bonusPay}gp earned"
+character().mod_cc("DTD", -1) # Will error out automatically if at 0 dtd
+
+return f'''embed -title "Downtime Activity: Snowhaven Patrol" -desc "​Rerolled **{rrName}**: {rrStr} due to the hired guard guild aide.
+
+**Character**: {name} ({level})
+**Current Lifestyle**: {lifestyle.title()}
+**{c1Name[0].title()}**: {c1}
+**{c2Name[0].title()}**: {c2}
+**Downtime Remaining**: {character().cc_str("DTD")}
+
+__**Results**__{'​'*c1.total}
+{payoutText}" -footer "!{aliasName} <lifestyle> <acrobatics OR athletics> <perception OR insight OR investigation>" -color cccc66 -thumb "{image}"'''
+</drac2>
